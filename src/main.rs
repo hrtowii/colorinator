@@ -1,41 +1,34 @@
 mod models;
+mod palette_generator;
 use clap::Parser;
-use home::home_dir;
-use models::config;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{fs, path::PathBuf};
+
+use crate::models::config;
 #[derive(Parser)]
 struct Cli {
     config_path: Option<PathBuf>,
 }
 
 fn homeify(path: PathBuf) -> PathBuf {
-    if let Some(mut home_dir) = home_dir() {
-        if path.starts_with("~") {
-            let mut meow = path.components();
-            meow.next();
-            home_dir.push(meow.as_path());
-        }
-        // dbg!(&home_dir);
-        home_dir
-    } else {
-        path.into()
+    match path.strip_prefix("~") {
+        Ok(rest) => home::home_dir().map(|home| home.join(rest)).unwrap_or(path),
+        Err(_) => path,
     }
 }
 
-fn main() {
-    let mut args = Cli::parse();
-    if args.config_path.is_none() {
-        println!("defaulting to ~/.config/colorinator/config.toml");
-        args.config_path = Some(homeify(
-            PathBuf::from_str("~/.config/colorinator/config.toml").unwrap(),
-        ));
+fn main() -> std::io::Result<()> {
+    let args = Cli::parse();
+
+    let path = homeify(
+        args.config_path
+            .unwrap_or_else(|| PathBuf::from("~/.config/colorinator/config.toml")),
+    );
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
     }
-    if !Path::exists(&args.config_path.as_ref().unwrap().parent().unwrap()) {
-        println!("creating file");
-        let _ = fs::create_dir_all(args.config_path.unwrap().parent().unwrap());
-    }
-    println!("Hello, world!");
+
+    println!("Config: {}", path.display());
+    let mut config = config::Config::parse(&path);
+    Ok(())
 }

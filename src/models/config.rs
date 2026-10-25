@@ -1,43 +1,35 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::fs::File;
+use std::path::Path;
+
 #[derive(Serialize, Deserialize, Debug)]
-struct Config {
+pub struct Config {
     wallpaper_path: String,
     paths: Vec<String>,
 }
 
 impl Config {
-    fn new() -> Config {
-        return Config {
-            wallpaper_path: String::from("~/.config/wallpapers/angel.png"),
-            paths: vec!["skibidi".to_string()],
-        };
+    pub fn new() -> Config {
+        Config {
+            wallpaper_path: "~/.config/wallpapers/angel.png".to_string(),
+            paths: vec!["~/.config/sway/config".to_string()],
+        }
     }
 
-    pub fn parse(path: String) -> Config {
-        let mut config_toml = String::new();
-
-        let mut file = match File::open(&path) {
-            Ok(file) => file,
-            Err(_) => {
-                println!("Could not find config file, using default!");
-                return Config::new();
+    pub fn parse(path: &Path) -> Config {
+        let config_toml = match fs::read_to_string(path) {
+            Ok(contents) => contents,
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
             }
         };
 
-        fs::read_to_string(&mut config_toml)
-            .unwrap_or_else(|err| panic!("Error while reading config: [{}]", err));
-
         match toml::from_str::<Config>(&config_toml) {
-            Ok(config) => {
-                println!("Successfully parsed config: {:#?}", config);
-                dbg!(&config);
-                config
-            }
-            Err(e) => {
-                eprintln!("Failed to parse TOML: {}", e);
-                Config::new()
+            Ok(config) => config,
+            Err(err) => {
+                eprintln!("Failed to parse TOML: {err}. Using defaults!");
+                std::process::exit(1);
             }
         }
     }
